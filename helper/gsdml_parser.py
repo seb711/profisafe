@@ -1,4 +1,7 @@
+from xml.dom import minidom
 from xml.dom.minidom import parse, Node
+
+from numpy import record
 
 BYTE_SIZE = {"Unsigned8": 1, "F_MessageTrailer4Byte": 4}
 
@@ -265,10 +268,10 @@ class XMLModuleItem:
         )
         self.allowed_in_slots = item_ref.getAttribute("AllowedInSlots")
         self.used_in_slots = item_ref.getAttribute("UsedInSlots")
+        self.profisafe_support = bool(xml_submodule.getAttribute("PROFIsafeSupported"))
         self.parameters = self.calc_parameter_items(xml_submodule)
-        self.profisafeSupport = bool(
-            xml_submodule.getAttribute("PROFIsafeSupported")
-        )
+        if self.profisafe_support:
+            self.f_parameters = self.calc_f_parameter_items(xml_submodule)
 
     def calc_parameter_items(self, submodule):
         record_data_list = submodule.getElementsByTagName("RecordDataList")
@@ -280,12 +283,21 @@ class XMLModuleItem:
         else:
             return []
 
+    def calc_f_parameter_items(self, submodule):
+        record_data_list = submodule.getElementsByTagName("RecordDataList")
+        if len(record_data_list) > 0:
+            f_parameter = record_data_list[0].getElementsByTagName(
+                "F_ParameterRecordDataItem"
+            )[0]
+            return XMLFParameterRecordDataItem(f_parameter)
+        else:
+            return []
+
     def add_size_io_data(self, data_items):
         item_size = 0
         for i in data_items:
             item_size += BYTE_SIZE[i.getAttribute("DataType")]
         return item_size
-
 
 class XMLParameterRecordDataItem:
     def __init__(self, parameter_element):
@@ -298,6 +310,25 @@ class XMLParameterRecordDataItem:
             int(x) for x in ref_item.getAttribute("AllowedValues").split("..")
         ]
         self.data_type = ref_item.getAttribute("Unsigned32")
+        name_item = parameter_element.getElementsByTagName("Name")[0]
+        self.name = name_item.getAttribute("TextId")
+
+
+class XMLFParameterRecordDataItem:
+    def __init__(self, parameter_element):
+        self.attributes = []
+        self.index = int(parameter_element.getAttribute("Index"))
+        self.paramDescCrc = int(parameter_element.getAttribute("F_ParamDescCRC"))
+        for element in parameter_element.childNodes:
+            if element.nodeType == minidom.Node.ELEMENT_NODE:
+                attr = {}
+                attr["name"] = element.nodeName
+                attr["default"] = element.getAttribute("DefaultValue")
+                attr["allowed_values"] = element.getAttribute("AllowedValues")
+                attr["changeable"] = bool(element.getAttribute("Changeable"))
+                attr["visible"] = bool(element.getAttribute("Visible"))
+                self.attributes.append(attr)
+
 
 class XMLInterfaceSubmoduleItem:
     def __init__(self, submodule_element):
@@ -381,6 +412,7 @@ class XMLDevice:
 
 def main():
     device = XMLDevice("./gsdml/test_project.xml")
+
 
 if __name__ == "__main__":
     main()

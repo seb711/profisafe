@@ -25,8 +25,8 @@ class ProfiSafeHostContext:
         self.dataLength = dataLength
 
         # VCN State (Consecutive Number)
-        self.x = 0
-        self.old_x = 0
+        self.x = 0x0
+        self.old_x = 0x0
 
         # assets
         self.oa_c_e = (
@@ -239,11 +239,10 @@ def main():
     scapy_cap = rdpcap("C://Users/sebas//Downloads//only_status_msgs.pcap")
     device = XMLDevice("./gsdml/test_project.xml")
 
-    for packet in scapy_cap[4:]:
+    for packet in scapy_cap:
         pdu = bytearray(parse_data_message(packet, device).input_data["data"][0])
-        print(pdu)
         context.updateData(pdu)
-        time.sleep(3)
+        time.sleep(1)
 
 
 # time.sleep(20)

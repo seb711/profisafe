@@ -1,12 +1,14 @@
 from context import PSState
 import crcmod
 
+from messages.pnio_safe import get_profisafe_pdu
+
 crc2_func = crcmod.mkCrcFun(0x15D6DCB, initCrc=0, xorOut=0x0, rev=False)
 
 
-def extractStatusByteData(controlByte):
-    binaryRep = "{0:08b}".format(controlByte)
-    controlObj = {
+def extractStatusByteData(statusByte):
+    binaryRep = "{0:08b}".format(statusByte)
+    statusObj = {
         "Bit7": 1 if int(binaryRep[0]) == 1 else 0,
         "cons_nr_R": 1 if int(binaryRep[1]) == 1 else 0,
         "Toggle_d": 1 if int(binaryRep[2]) == 1 else 0,
@@ -17,49 +19,46 @@ def extractStatusByteData(controlByte):
         "iPar_OK": 1 if int(binaryRep[7]) == 1 else 0,
     }
 
-    print(controlObj)
-
-    return controlObj
+    return statusObj
 
 
 def isDeviceFault(faults):
     return faults["Host_CE_CRC"] or faults["CE_CRC"] or faults["WD_timeout"]
 
 
-def checkCRC(data, dataLength, crc1, vcn):
-
-    print(
-        dataLength,
-        list(data[: (dataLength * -1)]),
-        list(vcn.to_bytes(dataLength, "big")),
-    )
-    print(
-        "[checkCRC]",
-        hex(
-            crc2_func(
-                bytearray(
-                    [0x00]
-                    + list(vcn.to_bytes(dataLength, "big"))
-                    + list(data[: (dataLength * -1)])
-                )[::-1],
-                crc=crc1,
-            )
-        ),
-        hex(int.from_bytes(bytes(data[(dataLength * -1) :]), "big")),
-        vcn,
-    )
+def checkCRC(data, crcLength, crc1, vcn):
+    # print(
+    #     crcLength,
+    #     list(data[: (crcLength * -1)]),
+    #     list(vcn.to_bytes(crcLength, "big")),
+    # )
+    # print(
+    #     "[checkCRC]",
+    #     hex(
+    #         crc2_func(
+    #             bytearray(
+    #                 [0x00]
+    #                 + list(vcn.to_bytes(crcLength, "big"))
+    #                 + list(data[: (crcLength * -1)])
+    #             )[::-1],
+    #             crc=crc1,
+    #         )
+    #     ),
+    #     hex(int.from_bytes(bytes(data[(crcLength * -1) :]), "big")),
+    #     vcn,
+    # )
     if (
         hex(
             crc2_func(
                 bytearray(
                     [0x00]
-                    + list(vcn.to_bytes(dataLength, "little"))
-                    + list(data[: (dataLength * -1)])
+                    + list(vcn.to_bytes(crcLength, "big"))
+                    + list(data[: (crcLength * -1)])
                 )[::-1],
                 crc=crc1,
             )
         )
-        == hex(int.from_bytes(bytes(data[-dataLength:]), "big"))
+        == hex(int.from_bytes(bytes(data[(crcLength * -1) :]), "big"))
     ):
         return True
     else:
@@ -83,6 +82,22 @@ class PrepareMessageInitState(PSState):
         # Toggle Bit
         context.toggle_h = 1
 
+        profisafe_block = get_profisafe_pdu(
+            control_byte={
+                "Toggle_h": self.context.toggle_h,
+                "activate_FV": self.context.activate_FV,
+                "Use_TO2": self.context.use_to2,
+                "R_cons_nr": self.context.r_cons_nr,
+                "OA_Req": self.context.oa_req,
+                "iPar_EN": self.context.ipar_en,
+            },
+            data=[0,0,0,0, 0, 0, 0, 0],
+            seed=0x22FF,
+            vcn=self.context.x,
+        )
+
+        profisafe_block.show()
+
         self.context.setState(AwaitDeviceInitAckState())
         return
 
@@ -98,6 +113,22 @@ class PrepareMessageFaultState(PSState):
     def prepareMessage(self, data):
         # TODO craft message -> no more things to do except sending message
 
+        profisafe_block = get_profisafe_pdu(
+            control_byte={
+                "Toggle_h": self.context.toggle_h,
+                "activate_FV": self.context.activate_FV,
+                "Use_TO2": self.context.use_to2,
+                "R_cons_nr": self.context.r_cons_nr,
+                "OA_Req": self.context.oa_req,
+                "iPar_EN": self.context.ipar_en,
+            },
+            data=[0xC3, 0x7E, 0, 0xFF, 0, 0, 0, 0],
+            seed=0x22FF,
+            vcn=self.context.x,
+        )
+
+        profisafe_block.show()
+
         self.context.setState(AwaitDeviceFaultAckState())
         return
 
@@ -112,6 +143,21 @@ class PrepareMessageNoFaultState(PSState):
 
     def prepareMessage(self, data):
         # TODO craft message -> no more things to do except sending message
+        profisafe_block = get_profisafe_pdu(
+            control_byte={
+                "Toggle_h": self.context.toggle_h,
+                "activate_FV": self.context.activate_FV,
+                "Use_TO2": self.context.use_to2,
+                "R_cons_nr": self.context.r_cons_nr,
+                "OA_Req": self.context.oa_req,
+                "iPar_EN": self.context.ipar_en,
+            },
+            data=[0xC3, 0x7E, 0, 0xFF, 0, 0, 0, 0],
+            seed=0x22FF,
+            vcn=self.context.x,
+        )
+
+        profisafe_block.show()
 
         self.context.setState(AwaitDeviceNoFaultAckState())
         return
@@ -149,7 +195,7 @@ class AwaitDeviceInitAckState(PSState):
         # reset whole process -> vcn ...
         self.context.activate_FV = 1
         self.context.FV_activated_S = 1
-        self.context.toggle_h = not self.context.toggle_h
+        self.context.toggle_h = 1 - self.context.toggle_h
         self.context.r_cons_nr = 1
         self.context.x = 0
         self.context.setState(PrepareMessageFaultState())
@@ -192,7 +238,7 @@ class AwaitDeviceNoFaultAckState(PSState):
         # reset whole process and use FailSafe Values
         self.context.activate_FV = 1
         self.context.FV_activated_S = 1
-        self.context.toggle_h = not self.context.toggle_h
+        self.context.toggle_h = 1 - self.context.toggle_h
         self.context.r_cons_nr = 1
         self.context.x = 0
         self.context.setState(WaitDelayTimeState())
@@ -233,7 +279,7 @@ class AwaitDeviceFaultAckState(PSState):
         # use FailSafe Values
         self.context.activate_FV = 1
         self.context.FV_activated_S = 1
-        self.context.toggle_h = not self.context.toggle_h
+        self.context.toggle_h = 1 - self.context.toggle_h
         self.context.r_cons_nr = 1
         self.context.x = 0
 
@@ -252,13 +298,17 @@ class CheckDeviceAckToggleEqState(PSState):
     def updateData(self, data) -> None:
         # TODO Check CRC of input data
         # TODO store faults from status byte
+        if not checkCRC(
+            data, self.context.dataLength, self.context.crc1, self.context.x + 1
+        ):
+            self.context.faults["Host_CE_CRC"] = True
         # TODO
         if not isDeviceFault(self.context.faults):
             self.context.old_x = self.context.x
             self.context.x += 1
             if self.context.x == 0x1000000:
                 self.context.x = 1
-            self.context.toggle_h = not self.context.toggle_h
+            self.context.toggle_h = 1 - self.context.toggle_h
 
             if (
                 self.context.activate_FV_C
@@ -276,9 +326,6 @@ class CheckDeviceAckToggleEqState(PSState):
 
             self.context.ipar_ok_s = self.context.ipar_ok
 
-            if checkCRC(data, self.context.dataLength, self.context.crc1, self.context.x):
-                self.context.faults["Host_CE_CRC"] = True
-
             self.context.setState(PrepareMessageNoFaultState())
             return self.context.prepareMessage(data)
 
@@ -289,11 +336,13 @@ class CheckDeviceAckToggleEqState(PSState):
             self.context.activate_FV = 1
             self.context.FV_activated_S = 1
 
-            self.context.toggle_h = not self.context.toggle_h
+            self.context.toggle_h = 1 - self.context.toggle_h
             self.context.r_cons_nr = 1
             self.context.x = 0
 
-            if checkCRC(data, self.context.dataLength, self.context.crc1, self.context.x):
+            if checkCRC(
+                data, self.context.dataLength, self.context.crc1, self.context.x
+            ):
                 self.context.faults["Host_CE_CRC"] = True
 
             self.context.setState(PrepareMessageFaultState())
@@ -315,6 +364,8 @@ class CheckDeviceAckToggleNotEqState(PSState):
     # TODO Check CRC of input data
 
     def updateData(self, data) -> None:
+        if not checkCRC(data, self.context.dataLength, self.context.crc1, self.context.x):
+            self.context.faults["Host_CE_CRC"] = True
         if not isDeviceFault(self.context.faults):
             # T8
             # No Update of VCN!!!
@@ -334,9 +385,6 @@ class CheckDeviceAckToggleNotEqState(PSState):
 
             self.context.ipar_ok_s = self.context.ipar_ok
 
-            if checkCRC(data, self.context.dataLength, self.context.crc1, self.context.x):
-                self.context.faults["Host_CE_CRC"] = True
-
             self.context.setState(PrepareMessageNoFaultState())
             return self.context.prepareMessage(data)
         else:
@@ -346,12 +394,9 @@ class CheckDeviceAckToggleNotEqState(PSState):
             # Use FailSafe Values
             self.context.activate_FV = 1
             self.context.FV_activated_S = 1
-            self.context.toggle_h = not self.context.toggle_h
+            self.context.toggle_h = 1 - self.context.toggle_h
             self.context.r_cons_nr = 1
             self.context.x = 0
-
-            if checkCRC(data, self.context.dataLength, self.context.crc1, self.context.x):
-                self.context.faults["Host_CE_CRC"] = True
 
             self.context.setState(PrepareMessageFaultState())
             return self.context.prepareMessage(data)
@@ -371,6 +416,11 @@ class CheckDeviceAckToggleNotEqState(PSState):
 class CheckDeviceAckFaultState(PSState):
     def updateData(self, data) -> None:
         # TODO Check CRC of input data
+        if not checkCRC(
+            data, self.context.dataLength, self.context.crc1, self.context.x + 1
+        ):
+            self.context.faults["Host_CE_CRC"] = True
+
         if (
             not isDeviceFault(self.context.faults)
             and self.context.oa_c_e
@@ -395,7 +445,7 @@ class CheckDeviceAckFaultState(PSState):
             self.context.x += 1
             if self.context.x == 0x1000000:
                 self.context.x = 1
-            self.context.toggle_h = not self.context.toggle_h
+            self.context.toggle_h = 1 - self.context.toggle_h
 
             if (
                 self.context.activate_FV_C
@@ -413,9 +463,6 @@ class CheckDeviceAckFaultState(PSState):
 
             self.context.ipar_ok_s = self.context.ipar_ok
 
-            if checkCRC(data, self.context.dataLength, self.context.crc1, self.context.x):
-                self.context.faults["Host_CE_CRC"] = True
-
             self.context.setState(PrepareMessageNoFaultState())
             return self.prepareMessage(data)
         elif isDeviceFault(self.context.faults):
@@ -428,12 +475,9 @@ class CheckDeviceAckFaultState(PSState):
             # Use FailSafe Values
             self.context.activate_FV = 1
             self.context.FV_activated_S = 1
-            self.context.toggle_h = not self.context.toggle_h
+            self.context.toggle_h = 1 - self.context.toggle_h
             self.context.r_cons_nr = 1
             self.context.x = 0
-
-            if checkCRC(data, self.context.dataLength, self.context.crc1, self.context.x):
-                self.context.faults["Host_CE_CRC"] = True
 
             self.context.setState(PrepareMessageFaultState())
             return self.prepareMessage(data)
@@ -451,7 +495,7 @@ class CheckDeviceAckFaultState(PSState):
             # use failsafe values
             self.context.activate_FV = 1
             self.context.FV_activated_S = 1
-            self.context.toggle_h = not self.context.toggle_h
+            self.context.toggle_h = 1 - self.context.toggle_h
             self.context.r_cons_nr = 0
             self.context.old_x = self.context.x
             self.context.x += 1
