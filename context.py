@@ -255,13 +255,5 @@ def main():
         time.sleep(1)
 
 
-# time.sleep(20)
-
-# context.connect()
-# context.write("test")
-# context.announceEndPrm()
-# context.ackApplicationReady()
-
-
 if __name__ == "__main__":
     main()
