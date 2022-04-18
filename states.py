@@ -96,7 +96,7 @@ class PrepareMessageInitState(PSState):
             vcn=self.context.x,
         )
 
-        profisafe_block.show()
+        self.context.profisafe_block = profisafe_block
 
         self.context.setState(AwaitDeviceInitAckState())
         return
@@ -127,7 +127,7 @@ class PrepareMessageFaultState(PSState):
             vcn=self.context.x,
         )
 
-        profisafe_block.show()
+        self.context.profisafe_block = profisafe_block
 
         self.context.setState(AwaitDeviceFaultAckState())
         return
@@ -157,7 +157,7 @@ class PrepareMessageNoFaultState(PSState):
             vcn=self.context.x,
         )
 
-        profisafe_block.show()
+        self.context.profisafe_block = profisafe_block
 
         self.context.setState(AwaitDeviceNoFaultAckState())
         return
@@ -299,7 +299,7 @@ class CheckDeviceAckToggleEqState(PSState):
         # TODO Check CRC of input data
         # TODO store faults from status byte
         if not checkCRC(
-            data, self.context.dataLength, self.context.crc1, self.context.x + 1
+            data, self.context.crcLength, self.context.crc1, self.context.x + 1
         ):
             self.context.faults["Host_CE_CRC"] = True
         # TODO
@@ -341,7 +341,7 @@ class CheckDeviceAckToggleEqState(PSState):
             self.context.x = 0
 
             if checkCRC(
-                data, self.context.dataLength, self.context.crc1, self.context.x
+                data, self.context.crcLength, self.context.crc1, self.context.x
             ):
                 self.context.faults["Host_CE_CRC"] = True
 
@@ -364,7 +364,7 @@ class CheckDeviceAckToggleNotEqState(PSState):
     # TODO Check CRC of input data
 
     def updateData(self, data) -> None:
-        if not checkCRC(data, self.context.dataLength, self.context.crc1, self.context.x):
+        if not checkCRC(data, self.context.crcLength, self.context.crc1, self.context.x):
             self.context.faults["Host_CE_CRC"] = True
         if not isDeviceFault(self.context.faults):
             # T8
