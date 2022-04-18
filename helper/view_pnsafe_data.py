@@ -127,8 +127,8 @@ def parse_data_message(packet, device):
 
 
 crc24_func = crcmod.mkCrcFun(0x15D6DCB, initCrc=0, xorOut=0x0, rev=False)
-scapy_cap = rdpcap("C://Users/sebas//Downloads//only_status_msgs.pcap")
-device = XMLDevice("./gsdml/test_project.xml")
+scapy_cap = rdpcap("../sniff/only_status_msgs.pcap")
+device = XMLDevice("../gsdml/test_project.xml")
 
 for idx, packet in enumerate(scapy_cap[4:]):
     pdu = bytearray(parse_data_message(packet, device).input_data["data"][0])
