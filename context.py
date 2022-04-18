@@ -246,7 +246,7 @@ def main():
 
     context.prepareMessage("None")
 
-    scapy_cap = rdpcap("C://Users/sebas//Downloads//only_status_msgs.pcap")
+    scapy_cap = rdpcap("./sniff/only_status_msgs.pcap")
     device = XMLDevice("./gsdml/test_project.xml")
 
     for packet in scapy_cap:
