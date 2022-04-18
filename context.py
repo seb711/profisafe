@@ -72,6 +72,10 @@ class ProfiSafeHostContext:
         )
         self.lastStatus = None
 
+        # pdu to send
+        self.profisafe_block = None
+        self.data = [0, 0, 0, 0, 0, 0, 0, 0]
+
     def setState(self, state: PSState):
 
         print(f"PROFISAFE: Transitioning to {type(state).__name__}")
@@ -91,6 +95,12 @@ class ProfiSafeHostContext:
 
     def prepareMessage(self, data):
         self._state.prepareMessage(data)
+
+    def setData(self, data):
+        self.data = data[0 : self.dataLength]
+
+    def getProfisafeBlock(self):
+        return self.profisafe_block
 
     # Service Methods
 
@@ -231,7 +241,7 @@ def parse_data_message(packet, device):
 
 def main():
     context = ProfiSafeHostContext(
-        state=PrepareMessageInitState(), crc1=0x22FF, dataLength=3, seed_zero=True
+        state=PrepareMessageInitState(), crc1=0x22FF, dataLength=8, seed_zero=True
     )
 
     context.prepareMessage("None")
